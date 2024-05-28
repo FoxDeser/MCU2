@@ -8,6 +8,7 @@
 
 #include "main.h"
 #include "stm32f4xx_hal_conf.h"
+#include "stdio.h"
 #include "string.h"
 
 void UART2_Init(void);
@@ -25,17 +26,55 @@ int main(void)
 {
 	RCC_OscInitTypeDef osc_init;
 	RCC_ClkInitTypeDef clk_init;
+	char msg[100];
 
 	HAL_Init();
 	UART2_Init();
 
+	char* banner = "The application is running with HSI. \rNow change to HSE \r\n";
+	HAL_UART_Transmit(&huart2, (uint8_t*) banner, strlen(banner), HAL_MAX_DELAY);
+
 	memset(&osc_init,0,sizeof(osc_init));
 	osc_init.OscillatorType = RCC_OSCILLATORTYPE_HSE;
 	osc_init.HSEState = RCC_HSE_ON;
-	if(HAL_RCC_OscConfig(&osc_init) != HAL_OK)
+	while(HAL_RCC_OscConfig(&osc_init) != HAL_OK);
+
+	clk_init.ClockType = RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+	clk_init.SYSCLKSource = RCC_SYSCLKSOURCE_HSE;
+	clk_init.AHBCLKDivider = RCC_SYSCLK_DIV2;
+	clk_init.APB1CLKDivider = RCC_HCLK_DIV2;
+	clk_init.APB2CLKDivider = RCC_HCLK_DIV2;
+	if(HAL_RCC_ClockConfig(&clk_init,FLASH_LATENCY_0) != HAL_OK)
 	{
 		Error_handler();
 	}
+
+	__HAL_RCC_HSI_DISABLE(); //saves some current
+
+	/*
+	 * Do the SYSTICK Configuration
+	 */
+	HAL_SYSTICK_Config(HAL_RCC_GetHCLKFreq()/1000);
+	HAL_SYSTICK_CLKSourceConfig(SYSTICK_CLKSOURCE_HCLK);
+
+	//because the UART hanging on APb2 that is re-configure to 2Mhz,so it should be init again
+	UART2_Init();
+
+	memset(msg,0,sizeof(msg));
+	sprintf(msg,"SYSCLK : %ld HZ\r\n",HAL_RCC_GetSysClockFreq());
+	HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+
+	memset(msg,0,sizeof(msg));
+	sprintf(msg,"HCLK : %ld HZ\r\n",HAL_RCC_GetHCLKFreq());
+	HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+
+	memset(msg,0,sizeof(msg));
+	sprintf(msg,"PCLK1 : %ld HZ\r\n",HAL_RCC_GetPCLK1Freq());
+	HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
+
+	memset(msg,0,sizeof(msg));
+	sprintf((char*)msg,"PCLK2 : %ld HZ\r\n",HAL_RCC_GetPCLK2Freq());
+	HAL_UART_Transmit(&huart2, (uint8_t*)msg, strlen(msg), HAL_MAX_DELAY);
 
 	while(1);
 
